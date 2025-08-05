@@ -1,0 +1,234 @@
+﻿@page "/add-room"
+@using KapadaModel.DBOs
+@using KapadaApplication.Services
+@inject UserService Session
+@inject NavigationManager Navigation
+@using KapadaModel.Response
+@using System.Text.Json
+@inject HttpClient Http
+
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6 col-lg-5">
+            <div class="card shadow-sm rounded-4 p-4">
+                <h3 class="mb-3 text-center text-primary">Add Room</h3>
+
+                @if (showMessage)
+                {
+                    <div class="alert @(isSuccess ? "alert-success" : "alert-danger") alert-dismissible fade show" role="alert">
+                        @message
+                        <button type="button" class="btn-close" @onclick="() => showMessage = false"></button>
+                    </div>
+                }
+
+                <EditForm Model="newRoom" OnValidSubmit="CreateRoom">
+                    <DataAnnotationsValidator />
+
+                    <div class="mb-3">
+                        <label for="name" class="form-label">
+                            Room Name : <span style="color: red">*</span>
+                        </label>
+                        <InputText id="name" class="form-control" @bind-Value="newRoom.RoomName" />
+                        <ValidationMessage For="@(() => newRoom.RoomName)" class="text-danger" />
+                    </div>
+
+                    <button class="btn btn-primary w-100">Create Room</button>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+
+    <div class="row justify-content-center mt-5">
+        <div class="col-lg-10">
+            <h4 class="text-center mb-3">Existing Rooms</h4>
+
+            @if (rooms == null)
+            {
+                <p class="text-muted text-center">Loading...</p>
+            }
+            else if (!rooms.Any())
+            {
+                <p class="text-muted text-center">No Rooms found.</p>
+            }
+            else
+            {
+                <table class="table table-bordered table-hover shadow-sm">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Room Name</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var room in rooms)
+                        {
+                            <tr>
+                                <td>@room.RoomName</td>
+                                <td class="text-end">
+                                    <button class="btn btn-sm btn-outline-primary me-2" @onclick="() => StartEdit(room)">Edit</button>
+                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => ConfirmDelete(room)">Delete</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+</div>
+
+<!-- Edit Modal -->
+@if (editRoom != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Edit Room</h5>
+                    <button type="button" class="btn-close" @onclick="CloseEditModal"></button>
+                </div>
+                <div class="modal-body">
+                    <EditForm Model="editRoom" OnValidSubmit="UpdateRoom">
+                        <DataAnnotationsValidator />
+                        <div class="mb-3">
+                            <label class="form-label">
+                                Room Name : <span style="color: red">*</span>
+                            </label>
+                            <InputText class="form-control" @bind-Value="editRoom.RoomName" />
+                            <ValidationMessage For="@(() => editRoom.RoomName)" class="text-danger" />
+                        </div>
+                        <button class="btn btn-primary">Save</button>
+                        <button type="button" class="btn btn-secondary ms-2" @onclick="CloseEditModal">Cancel</button>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Delete Confirm Modal -->
+@if (deleteRoom != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title text-danger">Confirm Delete</h5>
+                    <button type="button" class="btn-close" @onclick="CancelDelete"></button>
+                </div>
+                <div class="modal-body">
+                    Are you sure you want to delete "<strong>@deleteRoom.RoomName</strong>"?
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-danger" @onclick="DeleteRoom">Delete</button>
+                    <button class="btn btn-secondary" @onclick="CancelDelete">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private  RoomResponseDBO newRoom = new();
+    private List<RoomResponseDBO>? rooms;
+
+    private bool showMessage = false;
+    private string message = string.Empty;
+    private bool isSuccess = false;
+
+    private RoomResponseDBO? editRoom;
+    private RoomResponseDBO? deleteRoom;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Session.IsLoggedIn)
+        {
+            Navigation.NavigateTo("/login");
+            return;
+        }
+        await LoadRooms();
+    }
+
+    private async Task LoadRooms()
+    {
+        rooms = await Http.GetFromJsonAsync<List<RoomResponseDBO>>("api/room/getRoom");
+    }
+
+    private async Task CreateRoom()
+    {
+        var response = await Http.PostAsJsonAsync("api/room/createRoom", newRoom);
+        var result = await response.Content.ReadAsStringAsync();
+
+        showMessage = true;
+        message = result;
+        isSuccess = response.IsSuccessStatusCode;
+
+        if (isSuccess)
+        {
+            newRoom = new();
+            await LoadRooms();
+        }
+        else
+        {
+            var content = await response.Content.ReadAsStringAsync();
+
+            try
+            {
+                var json = JsonDocument.Parse(content);
+                var errorElement = json.RootElement.GetProperty("errors");
+                var firstError = errorElement.EnumerateObject().First().Value[0].GetString();
+                message = firstError ?? "Something went wrong.";
+            }
+            catch
+            {
+                message = "An error occurred.";
+            }
+        }
+    }
+
+    private void StartEdit(RoomResponseDBO _room)
+    {
+        editRoom = new RoomResponseDBO { Id = _room.Id, RoomName = _room.RoomName };
+    }
+
+    private void CloseEditModal() => editRoom = null;
+
+    private async Task UpdateRoom()
+    {
+        if (editRoom == null) return;
+
+        var response = await Http.PutAsJsonAsync($"api/room/updateRoom/{editRoom.Id}", editRoom);
+        var result = await response.Content.ReadAsStringAsync();
+
+        showMessage = true;
+        message = result;
+        isSuccess = response.IsSuccessStatusCode;
+
+        if (isSuccess)
+        {
+            editRoom = null;
+            await LoadRooms();
+        }
+    }
+
+    private void ConfirmDelete(RoomResponseDBO room) => deleteRoom = room;
+    private void CancelDelete() => deleteRoom = null;
+
+    private async Task DeleteRoom()
+    {
+        if (deleteRoom == null) return;
+
+        var response = await Http.DeleteAsync($"api/room/deleteRoom/{deleteRoom.Id}");
+        var result = await response.Content.ReadAsStringAsync();
+
+        showMessage = true;
+        message = result;
+        isSuccess = response.IsSuccessStatusCode;
+
+        if (isSuccess)
+        {
+            deleteRoom = null;
+            await LoadRooms();
+        }
+    }
+}

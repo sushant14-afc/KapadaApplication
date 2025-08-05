@@ -1,0 +1,101 @@
+﻿@using KapadaApplication.Services
+@inject UserService Session
+
+<div class="top-row ps-3 navbar navbar-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="">KapadaApplication</a>
+        <button title="Navigation menu" class="navbar-toggler" @onclick="ToggleNavMenu">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+    </div>
+</div>
+
+<div class="@NavMenuCssClass nav-scrollable" @onclick="ToggleNavMenu">
+    <nav class="flex-column">
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="counter">
+                <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Counter
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="weather">
+                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Weather
+            </NavLink>
+        </div>
+
+        @if (Session.IsLoggedIn)
+        {
+
+            @* <div class="nav-item px-3">
+                <NavLink class="nav-link d-flex align-items-center" href="/history">
+                    <span class="bi bi-clock-history me-2 fs-6 position-relative" style="bottom: 1rem;" aria-hidden="true"></span>
+                    <span>Historical Data</span>
+                </NavLink>
+            </div> *@
+
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="/history">
+                    <span class="bi bi-clock-history me-2 fs-6 mb-4" aria-hidden="true"></span> Historical Data
+                </NavLink>
+            </div>
+
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="/add-categories">
+                    <span class="bi bi-grid-fill me-2 mb-4" aria-hidden="true"></span> Add Category
+
+                </NavLink>
+            </div>
+
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="/add-room">
+                    <span class="bi bi-door-closed-fill mb-4" aria-hidden="true"></span> Add Room
+
+                </NavLink>
+            </div>
+
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="/add-item">
+                    <span class="bi bi-box-seam mb-4" aria-hidden="true"></span> Add To Inventory
+                </NavLink>
+            </div>
+
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="/newsell">
+                    <span class="bi bi-shop mb-4" aria-hidden="true"></span> My Inventory
+                </NavLink>
+            </div>
+
+        }
+
+       
+
+        
+
+    </nav>
+</div>
+
+@code {
+    private bool collapseNavMenu = true;
+
+    private string? NavMenuCssClass => collapseNavMenu ? "collapse" : null;
+
+    private void ToggleNavMenu()
+    {
+        collapseNavMenu = !collapseNavMenu;
+    }
+
+    protected override void OnInitialized()
+    {
+        Session.OnChange += StateHasChanged;
+    }
+
+    public void Dispose()
+    {
+        Session.OnChange -= StateHasChanged;
+    }
+}

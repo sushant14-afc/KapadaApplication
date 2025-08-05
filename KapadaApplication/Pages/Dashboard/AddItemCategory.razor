@@ -1,0 +1,234 @@
+﻿@page "/add-categories"
+@using KapadaModel.DBOs
+@using KapadaApplication.Services
+@inject UserService Session
+@inject NavigationManager Navigation
+@using KapadaModel.Response
+@using System.Text.Json
+@inject HttpClient Http
+
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6 col-lg-5">
+            <div class="card shadow-sm rounded-4 p-4">
+                <h3 class="mb-3 text-center text-primary">Add Category</h3>
+
+                @if (showMessage)
+                {
+                    <div class="alert @(isSuccess ? "alert-success" : "alert-danger") alert-dismissible fade show" role="alert">
+                        @message
+                        <button type="button" class="btn-close" @onclick="() => showMessage = false"></button>
+                    </div>
+                }
+
+                <EditForm Model="newCategory" OnValidSubmit="AddCategory">
+                    <DataAnnotationsValidator />
+
+                    <div class="mb-3">
+                        <label for="name" class="form-label">
+                            Category Name : <span style="color: red">*</span>
+                        </label>
+                        <InputText id="name" class="form-control" @bind-Value="newCategory.Name" />
+                        <ValidationMessage For="@(() => newCategory.Name)" class="text-danger" />
+                    </div>
+
+                    <button class="btn btn-primary w-100">Add Category</button>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+
+    <div class="row justify-content-center mt-5">
+        <div class="col-lg-10">
+            <h4 class="text-center mb-3">Existing Categories</h4>
+
+            @if (categories == null)
+            {
+                <p class="text-muted text-center">Loading...</p>
+            }
+            else if (!categories.Any())
+            {
+                <p class="text-muted text-center">No categories found.</p>
+            }
+            else
+            {
+                <table class="table table-bordered table-hover shadow-sm">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Name</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var category in categories)
+                        {
+                            <tr>
+                                <td>@category.Name</td>
+                                <td class="text-end">
+                                    <button class="btn btn-sm btn-outline-primary me-2" @onclick="() => StartEdit(category)">Edit</button>
+                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => ConfirmDelete(category)">Delete</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+</div>
+
+<!-- Edit Modal -->
+@if (editCategory != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Edit Category</h5>
+                    <button type="button" class="btn-close" @onclick="CloseEditModal"></button>
+                </div>
+                <div class="modal-body">
+                    <EditForm Model="editCategory" OnValidSubmit="UpdateCategory">
+                        <DataAnnotationsValidator />
+                        <div class="mb-3">
+                            <label class="form-label">
+                                Category Name : <span style="color: red">*</span>
+                            </label>
+                            <InputText class="form-control" @bind-Value="editCategory.Name" />
+                            <ValidationMessage For="@(() => editCategory.Name)" class="text-danger" />
+                        </div>
+                        <button class="btn btn-primary">Save</button>
+                        <button type="button" class="btn btn-secondary ms-2" @onclick="CloseEditModal">Cancel</button>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Delete Confirm Modal -->
+@if (deleteCategory != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title text-danger">Confirm Delete</h5>
+                    <button type="button" class="btn-close" @onclick="CancelDelete"></button>
+                </div>
+                <div class="modal-body">
+                    Are you sure you want to delete "<strong>@deleteCategory.Name</strong>"?
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-danger" @onclick="DeleteCategory">Delete</button>
+                    <button class="btn btn-secondary" @onclick="CancelDelete">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private CategoryResponseDBO newCategory = new();
+    private List<CategoryResponseDBO>? categories;
+
+    private bool showMessage = false;
+    private string message = string.Empty;
+    private bool isSuccess = false;
+
+    private CategoryResponseDBO? editCategory;
+    private CategoryResponseDBO? deleteCategory;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Session.IsLoggedIn)
+        {
+            Navigation.NavigateTo("/login");
+            return;
+        }
+        await LoadCategories();
+    }
+
+    private async Task LoadCategories()
+    {
+        categories = await Http.GetFromJsonAsync<List<CategoryResponseDBO>>("api/category/getCategories");
+    }
+
+    private async Task AddCategory()
+    {
+        var response = await Http.PostAsJsonAsync("api/category/createCategory", newCategory);
+        var result = await response.Content.ReadAsStringAsync();
+
+        showMessage = true;
+        message = result;
+        isSuccess = response.IsSuccessStatusCode;
+
+        if (isSuccess)
+        {
+            newCategory = new();
+            await LoadCategories();
+        }
+        else
+        {
+            var content = await response.Content.ReadAsStringAsync();
+
+            try
+            {
+                var json = JsonDocument.Parse(content);
+                var errorElement = json.RootElement.GetProperty("errors");
+                var firstError = errorElement.EnumerateObject().First().Value[0].GetString();
+                message = firstError ?? "Something went wrong.";
+            }
+            catch
+            {
+                message = "An error occurred.";
+            }
+        }
+    }
+
+    private void StartEdit(CategoryResponseDBO category)
+    {
+        editCategory = new CategoryResponseDBO { Id = category.Id, Name = category.Name };
+    }
+
+    private void CloseEditModal() => editCategory = null;
+
+    private async Task UpdateCategory()
+    {
+        if (editCategory == null) return;
+
+        var response = await Http.PutAsJsonAsync($"api/category/updatecategory/{editCategory.Id}", editCategory);
+        var result = await response.Content.ReadAsStringAsync();
+
+        showMessage = true;
+        message = result;
+        isSuccess = response.IsSuccessStatusCode;
+
+        if (isSuccess)
+        {
+            editCategory = null;
+            await LoadCategories();
+        }
+    }
+
+    private void ConfirmDelete(CategoryResponseDBO category) => deleteCategory = category;
+    private void CancelDelete() => deleteCategory = null;
+
+    private async Task DeleteCategory()
+    {
+        if (deleteCategory == null) return;
+
+        var response = await Http.DeleteAsync($"api/category/delete/{deleteCategory.Id}");
+        var result = await response.Content.ReadAsStringAsync();
+
+        showMessage = true;
+        message = result;
+        isSuccess = response.IsSuccessStatusCode;
+
+        if (isSuccess)
+        {
+            deleteCategory = null;
+            await LoadCategories();
+        }
+    }
+}

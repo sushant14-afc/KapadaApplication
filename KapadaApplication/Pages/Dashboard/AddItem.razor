@@ -1,0 +1,161 @@
+﻿@page "/add-item"
+@page "/add-item/{InventoryId:int}"
+@using KapadaApplication.Services
+@using KapadaModel.DBOs
+@inject UserService Session
+@inject HttpClient Http
+@inject NavigationManager Navigation
+
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card shadow-sm rounded-4">
+                <div class="card-body p-4">
+                    <h4 class="card-title mb-4 text-center">Create Inventory</h4>
+
+                    @if (!string.IsNullOrEmpty(Message))
+                    {
+                        <div class="alert @AlertClass alert-dismissible fade show text-center" role="alert">
+                            @Message
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    }
+
+                    <EditForm Model="inventoryModel" OnValidSubmit="HandleSubmit">
+                        <DataAnnotationsValidator />
+                       
+
+                        <div class="mb-3">
+                            <label class="form-label">Category</label>
+                            <InputSelect @bind-Value="inventoryModel.CategoryId" class="form-select">
+                                <option value="">-- Select Category --</option>
+                                @foreach (var category in Categories)
+                                {
+                                    <option value="@category.Id">@category.Name</option>
+                                }
+                            </InputSelect>
+                            <ValidationMessage For="@(() => inventoryModel.CategoryId)" class="text-danger small" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Room</label>
+                            <InputSelect @bind-Value="inventoryModel.RoomId" class="form-select">
+                                <option value="">-- Select Room --</option>
+                                @foreach (var room in Rooms)
+                                {
+                                    <option value="@room.Id">@room.RoomName</option>
+                                }
+                            </InputSelect>
+                            <ValidationMessage For="@(() => inventoryModel.RoomId)" class="text-danger small" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Quantity</label>
+                            <InputNumber @bind-Value="inventoryModel.Quantity" class="form-control" min="1" />
+                            <ValidationMessage For="@(() => inventoryModel.Quantity)" class="text-danger small" />
+                        </div>
+
+                        <div class="d-grid">
+
+                            <button type="submit" class="btn btn-primary">
+                                @(InventoryId.HasValue ? "Update Inventory" : "Create Inventory")
+                            </button>
+@*                             <button type="submit" class="btn btn-primary">Create Inventory</button>
+ *@                        </div>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public int? InventoryId { get; set; }
+    private InventoryCreateDBO inventoryModel = new();
+    private List<CategoryResponseDBO> Categories = new();
+    private List<RoomResponseDBO> Rooms = new();
+    private string? Message;
+    private string AlertClass = "alert-success";
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Session.IsLoggedIn)
+        {
+            Navigation.NavigateTo("/login");
+            return;
+        }
+
+        Categories = await Http.GetFromJsonAsync<List<CategoryResponseDBO>>("api/category/getCategories");
+        Rooms = await Http.GetFromJsonAsync<List<RoomResponseDBO>>("api/room/getRoom");
+
+        if (InventoryId.HasValue)
+        {
+            // Fetch existing inventory item for editing
+            var existingItem = await Http.GetFromJsonAsync<InventoryCreateDBO>($"api/inventory/get/{InventoryId.Value}");
+            if (existingItem != null)
+            {
+                inventoryModel = new InventoryCreateDBO
+                    {
+                        CategoryId = existingItem.CategoryId,
+                        RoomId = existingItem.RoomId,
+                        Quantity = existingItem.Quantity
+                    };
+            }
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        HttpResponseMessage response;
+
+        if (InventoryId.HasValue)
+        {
+            response = await Http.PutAsJsonAsync($"api/inventory/edit/{InventoryId.Value}", inventoryModel);
+        }
+        else
+        {
+            response = await Http.PostAsJsonAsync("api/inventory/createInventory", inventoryModel);
+        }
+
+        if (response.IsSuccessStatusCode)
+        {
+            var apiMessage = await response.Content.ReadAsStringAsync();
+            Message = string.IsNullOrWhiteSpace(apiMessage) ?
+                      (InventoryId.HasValue ? "Inventory updated successfully." : "Inventory created successfully.")
+                      : apiMessage;
+
+            AlertClass = "alert-success";
+
+            if (!InventoryId.HasValue)
+            {
+                inventoryModel = new(); // Reset form only if new
+            }
+        }
+        else
+        {
+            var apiMessage = await response.Content.ReadAsStringAsync();
+            Message = string.IsNullOrWhiteSpace(apiMessage) ? "Operation failed." : apiMessage;
+            AlertClass = "alert-danger";
+        }
+    }
+
+    // private async Task HandleSubmit()
+    // {
+    //     var response = await Http.PostAsJsonAsync("api/inventory/createInventory", inventoryModel);
+
+    //     if (response.IsSuccessStatusCode)
+    //     {
+    //         var apiMessage = await response.Content.ReadAsStringAsync(); // Read message from controller
+    //         Message = string.IsNullOrWhiteSpace(apiMessage) ? "Inventory created successfully." : apiMessage;
+    //         AlertClass = "alert-success";
+    //         inventoryModel = new(); // reset form
+    //     }
+    //     else
+    //     {
+    //         var apiMessage = await response.Content.ReadAsStringAsync(); // Read error message
+    //         Message = string.IsNullOrWhiteSpace(apiMessage) ? "Failed to create inventory." : apiMessage;
+    //         AlertClass = "alert-danger";
+    //     }
+    // }
+}

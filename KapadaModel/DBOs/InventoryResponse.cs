@@ -15,5 +15,8 @@ namespace KapadaModel.DBOs
         public DateTime CreatedDate { get; set; }
 
         public bool IsSold { get; set; }
+
+        public bool IsSelected { get; set; } = false;
+
     }
 }

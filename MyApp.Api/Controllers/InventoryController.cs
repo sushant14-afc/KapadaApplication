@@ -166,6 +166,46 @@ namespace MyApp.Api.Controllers
             return Ok(result);
         }
 
+        //[HttpGet("available-grouped/summary")]
+        //public async Task<IActionResult> GetGroupedInventoryCategorySummary([FromQuery] string? category)
+        //{
+        //    var query = _context.Inventory
+        //        .Where(i => !i.IsSold)
+        //        .Include(i => i.Category)
+        //        .AsQueryable();
+
+        //    if (!string.IsNullOrEmpty(category))
+        //    {
+        //        query = query.Where(i => i.Category.Name == category);
+        //    }
+
+        //    var categorySummary = await query
+        //        .GroupBy(i => i.Category.Name)
+        //        .Select(g => new GroupedInventorySummary
+        //        {
+        //            Category = g.Key,
+        //            TotalQuantity = g.Sum(x => x.Quantity)
+        //        })
+        //        .ToListAsync();
+
+        //    return Ok(categorySummary);
+        //}
+
+        [HttpGet("available-quantities")]
+        public async Task<IActionResult> GetAvailableQuantities()
+        {
+            var quantities = await _context.Inventory
+                .Where(i => !i.IsSold)
+                .Select(i => i.Quantity)
+                .Distinct()
+                .OrderBy(q => q)
+                .ToListAsync();
+
+            return Ok(quantities);
+        }
+
+
+
 
     }
 }

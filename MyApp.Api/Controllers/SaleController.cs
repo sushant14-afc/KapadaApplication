@@ -31,10 +31,14 @@ namespace MyApp.Api.Controllers
             if (inventory.IsSold)
                 return BadRequest("This inventory item has already been sold.");
 
+            var totalPrice = saleDto.UnitPrice * inventory.Quantity;
+
             var sale = new Sale
             {
                 InventoryId = saleDto.InventoryId,
                 SoldTo = saleDto.SoldTo,
+                UnitPrice = saleDto.UnitPrice,
+                TotalPrice = totalPrice,
                 SaleDate = DateTime.UtcNow
             };
 
@@ -47,6 +51,78 @@ namespace MyApp.Api.Controllers
 
             return Ok(new { message = "Sale recorded successfully." });
         }
+
+        [HttpPost("createBatchSales")]
+        public async Task<IActionResult> CreateBatchSales([FromBody] List<SalesCreateDBO> sales)
+        {
+            if (sales == null || !sales.Any())
+                return BadRequest("No sales provided.");
+
+            foreach (var saleDto in sales)
+            {
+                if (!ModelState.IsValid)
+                    return BadRequest(ModelState);
+
+                var inventory = await _context.Inventory.FindAsync(saleDto.InventoryId);
+                if (inventory == null)
+                    return NotFound($"Inventory not found: {saleDto.InventoryId}");
+
+                if (inventory.IsSold)
+                    return BadRequest($"Inventory item already sold: {saleDto.InventoryId}");
+
+                var totalPrice = saleDto.UnitPrice * inventory.Quantity;
+
+                var sale = new Sale
+                {
+                    InventoryId = saleDto.InventoryId,
+                    SoldTo = saleDto.SoldTo,
+                    UnitPrice = saleDto.UnitPrice,
+                    TotalPrice = totalPrice,
+                    SaleDate = DateTime.UtcNow
+                };
+
+                inventory.IsSold = true;
+
+                _context.Sales.Add(sale);
+                _context.Inventory.Update(inventory);
+            }
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = "Batch sales recorded successfully." });
+        }
+
+
+
+        //[HttpPost("createSale")]
+        //public async Task<IActionResult> CreateSale([FromBody] SalesCreateDBO saleDto)
+        //{
+        //    if (!ModelState.IsValid)
+        //        return BadRequest(ModelState);
+
+        //    var inventory = await _context.Inventory.FindAsync(saleDto.InventoryId);
+        //    if (inventory == null)
+        //        return NotFound("Inventory not found.");
+
+        //    if (inventory.IsSold)
+        //        return BadRequest("This inventory item has already been sold.");
+
+        //    var sale = new Sale
+        //    {
+        //        InventoryId = saleDto.InventoryId,
+        //        SoldTo = saleDto.SoldTo,
+        //        SaleDate = DateTime.UtcNow
+        //    };
+
+        //    inventory.IsSold = true;
+
+        //    _context.Sales.Add(sale);
+        //    _context.Inventory.Update(inventory);
+
+        //    await _context.SaveChangesAsync();
+
+        //    return Ok(new { message = "Sale recorded successfully." });
+        //}
 
 
         [HttpGet("getAllSale")]
@@ -125,8 +201,42 @@ namespace MyApp.Api.Controllers
             return Ok(result);
         }
 
+        //[HttpGet("available-grouped")]
+        //public async Task<IActionResult> GetAvailableGroupedInventory()
+        //{
+        //    var inventoryItems = await _context.Inventory
+        //        .Where(i => !i.IsSold)
+        //        .Include(i => i.Category)
+        //        .Include(i => i.Room)
+        //        .Select(i => new
+        //        {
+        //            CategoryName = i.Category.Name,
+        //            RoomName = i.Room.RoomName,
+        //            Quantity = i.Quantity
+        //        })
+        //        .ToListAsync();
+
+        //    var groupedInventory = inventoryItems
+        //        .GroupBy(item => item.CategoryName)
+        //        .Select(group => new
+        //        {
+        //            Category = group.Key,
+        //            Rooms = group
+        //                .GroupBy(g => g.RoomName)
+        //                .Select(rg => new
+        //                {
+        //                    RoomName = rg.Key,
+        //                    TotalQuantity = rg.Sum(x => x.Quantity)
+        //                })
+        //                .ToList()
+        //        })
+        //        .ToList();
+
+        //    return Ok(groupedInventory);
+        //}
+
         [HttpGet("available-grouped")]
-        public async Task<IActionResult> GetAvailableGroupedInventory()
+        public async Task<IActionResult> GetAvailableGroupedInventory([FromQuery] string? categoryName)
         {
             var inventoryItems = await _context.Inventory
                 .Where(i => !i.IsSold)
@@ -139,6 +249,13 @@ namespace MyApp.Api.Controllers
                     Quantity = i.Quantity
                 })
                 .ToListAsync();
+
+            if (!string.IsNullOrWhiteSpace(categoryName))
+            {
+                inventoryItems = inventoryItems
+                    .Where(i => i.CategoryName == categoryName)
+                    .ToList();
+            }
 
             var groupedInventory = inventoryItems
                 .GroupBy(item => item.CategoryName)
@@ -159,6 +276,7 @@ namespace MyApp.Api.Controllers
             return Ok(groupedInventory);
         }
 
+
         //[HttpGet("category-items")]
         //public async Task<IActionResult> GetItemsByCategory(string category)
         //{
@@ -170,25 +288,43 @@ namespace MyApp.Api.Controllers
         //    return Ok(items);
         //}
 
-        [HttpGet("category-items")]
-        public async Task<IActionResult> GetItemsByCategory(string category)
-        {
-            var items = await _context.Inventory
-                .Include(i => i.Category)
-                .Include(i => i.Room)  
-                .Where(i => i.Category.Name == category && !i.IsSold)
-                .Select(i => new InventoryResponse   
-                {
-                    Id = i.Id,
-                    RoomName = i.Room.RoomName,           
-                    Quantity = i.Quantity,
-                    CreatedDate = i.CreatedDate,
+            [HttpGet("category-items")]
+            public async Task<IActionResult> GetItemsByCategory(string category)
+            {
+                var items = await _context.Inventory
+                    .Include(i => i.Category)
+                    .Include(i => i.Room)  
+                    .Where(i => i.Category.Name == category && !i.IsSold)
+                    .Select(i => new InventoryResponse   
+                    {
+                        Id = i.Id,
+                        CategoryName = i.Category.Name,
+                        RoomName = i.Room.RoomName,           
+                        Quantity = i.Quantity,
+                        CreatedDate = i.CreatedDate,
                     
-                })
+                    })
+                    .ToListAsync();
+
+                return Ok(items);
+            }
+
+        [HttpGet("available-quantities-by-category")]
+        public async Task<IActionResult> GetAvailableQuantitiesByCategory(string category)
+        {
+            if (string.IsNullOrWhiteSpace(category))
+                return BadRequest("Category is required.");
+
+            var quantities = await _context.Inventory
+                .Where(i => !i.IsSold && i.Category.Name == category)
+                .Select(i => i.Quantity)
+                .Distinct()
+                .OrderBy(q => q)
                 .ToListAsync();
 
-            return Ok(items);
+            return Ok(quantities);
         }
+
 
 
 

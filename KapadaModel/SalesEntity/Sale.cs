@@ -16,7 +16,10 @@ namespace KapadaModel.SalesEntity
 
         public DateTime SaleDate { get; set; } = DateTime.UtcNow;
 
-        public string? SoldTo { get; set; }  
+        public string? SoldTo { get; set; }
+
+        public decimal UnitPrice { get; set; }      
+        public decimal TotalPrice { get; set; }
 
     }
 }

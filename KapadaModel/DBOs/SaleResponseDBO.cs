@@ -15,5 +15,8 @@ namespace KapadaModel.DBOs
         public decimal QuantitySold { get; set; }
         public DateTime SaleDate { get; set; }
         public string SoldTo { get; set; } = string.Empty;
+
+        public decimal UnitPrice { get; set; }     
+        public decimal TotalPrice { get; set; }
     }
 }

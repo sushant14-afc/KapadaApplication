@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using MyApp.Api.DataContext;
+using MyApp.Api.Service;
+using QuestPDF.Infrastructure;
 using System.Text;
 
 
@@ -25,6 +27,9 @@ builder.Services.AddCors(options =>
 });
 
 
+
+
+
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -44,6 +49,8 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
+builder.Services.AddScoped<PdfService>();
+
 builder.Services.AddAuthorization();
 
 
@@ -59,6 +66,8 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+QuestPDF.Settings.License = LicenseType.Community;
 
 var app = builder.Build();
 

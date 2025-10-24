@@ -1,0 +1,208 @@
+﻿@page "/salepdf"
+@using KapadaModel.DBOs
+@inject HttpClient Http
+@inject IJSRuntime JS
+
+<h3 class="mb-4 text-center">Sales Summary by Category</h3>
+
+@if (groupedSales == null)
+{
+    <p><em>Loading sales data...</em></p>
+}
+else if (!groupedSales.Any())
+{
+    <p>No sales found.</p>
+}
+else
+{
+    <table class="table table-hover table-bordered align-middle">
+        <thead class="table-dark">
+            <tr>
+                <th>Category</th>
+                <th>Total Quantity</th>
+                <th>Total Sales</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var group in groupedSales)
+            {
+                <tr>
+                    <td>@group.Category</td>
+                    <td>@group.TotalQuantity</td>
+                    <td>@group.TotalSales</td>
+                    <td>
+                        <button class="btn btn-sm btn-primary" @onclick="() => ShowCategoryDetails(group)">
+                            View Details
+                        </button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+<!-- Modal for Category Details -->
+@if (selectedCategory != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Sales Details - @selectedCategory.Category</h5>
+                    <button type="button" class="btn-close" @onclick="CloseCategoryDetails"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Buyers table -->
+                    <table class="table table-sm table-striped">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Buyer</th>
+                                <th>Total Quantity</th>
+                                <th>Total Price</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var buyerGroup in selectedCategory.Sales.GroupBy(s => s.SoldTo))
+                            {
+                                <tr>
+                                    <td>@buyerGroup.Key</td>
+                                    <td>@buyerGroup.Sum(s => s.QuantitySold)</td>
+                                    <td>@buyerGroup.Sum(s => s.TotalPrice)</td>
+                                    <td class="d-flex gap-2">
+                                        <button class="btn btn-sm btn-outline-primary"
+                                                @onclick="() => DownloadBuyerPdf(buyerGroup.Key)">
+                                            Download PDF
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-secondary"
+                                                @onclick="() => ToggleBuyer(buyerGroup.Key)">
+                                            @(expandedBuyers.Contains(buyerGroup.Key) ? "Hide Rooms" : "View Rooms")
+                                        </button>
+                                    </td>
+                                </tr>
+
+                                @if (expandedBuyers.Contains(buyerGroup.Key))
+                                {
+                                    <tr>
+                                        <td colspan="4">
+                                            <!-- Rooms table per buyer -->
+                                            <table class="table table-bordered table-sm mb-0">
+                                                <thead class="table-light">
+                                                    <tr>
+                                                        <th>Room</th>
+                                                        <th>Total Quantity</th>
+                                                        <th>Action</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @foreach (var roomGroup in buyerGroup.GroupBy(s => s.RoomName))
+                                                    {
+                                                        <tr>
+                                                            <td>@roomGroup.Key</td>
+                                                            <td>@roomGroup.Sum(s => s.QuantitySold)</td>
+                                                            <td>
+                                                                <button class="btn btn-sm btn-outline-secondary"
+                                                                        @onclick="() => ToggleRoom(buyerGroup.Key, roomGroup.Key)">
+                                                                    @(expandedRooms.Contains((buyerGroup.Key, roomGroup.Key)) ? "Hide Details" : "View Details")
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                        @if (expandedRooms.Contains((buyerGroup.Key, roomGroup.Key)))
+                                                        {
+                                                            <tr>
+                                                                <td colspan="3">
+                                                                    <!-- Individual sales -->
+                                                                    <table class="table table-sm table-striped mb-0">
+                                                                        <thead class="table-light">
+                                                                            <tr>
+                                                                                <th>Date</th>
+                                                                                <th>Quantity</th>
+                                                                                <th>Total Price</th>
+                                                                            </tr>
+                                                                        </thead>
+                                                                        <tbody>
+                                                                            @foreach (var sale in roomGroup.OrderBy(s => s.SaleDate))
+                                                                            {
+                                                                                <tr>
+                                                                                    <td>@sale.SaleDate.ToShortDateString()</td>
+                                                                                    <td>@sale.QuantitySold</td>
+                                                                                    <td>@sale.TotalPrice</td>
+                                                                                </tr>
+                                                                            }
+                                                                        </tbody>
+                                                                    </table>
+                                                                </td>
+                                                            </tr>
+                                                        }
+                                                    }
+                                                </tbody>
+                                            </table>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CloseCategoryDetails">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<GroupedSaleDBO>? groupedSales;
+    private GroupedSaleDBO? selectedCategory;
+    private HashSet<string> expandedBuyers = new();
+    private HashSet<(string buyer, string room)> expandedRooms = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        groupedSales = await Http.GetFromJsonAsync<List<GroupedSaleDBO>>("api/sale/sales-grouped");
+    }
+
+    private void ShowCategoryDetails(GroupedSaleDBO group)
+    {
+        selectedCategory = group;
+        expandedBuyers.Clear();
+        expandedRooms.Clear();
+    }
+
+    private void CloseCategoryDetails()
+    {
+        selectedCategory = null;
+        expandedBuyers.Clear();
+        expandedRooms.Clear();
+    }
+
+    private void ToggleBuyer(string buyer)
+    {
+        if (expandedBuyers.Contains(buyer))
+            expandedBuyers.Remove(buyer);
+        else
+            expandedBuyers.Add(buyer);
+    }
+
+    private void ToggleRoom(string buyer, string room)
+    {
+        var key = (buyer, room);
+        if (expandedRooms.Contains(key))
+            expandedRooms.Remove(key);
+        else
+            expandedRooms.Add(key);
+    }
+
+    private async Task DownloadBuyerPdf(string buyer)
+    {
+        // Call API endpoint to get PDF bytes
+        var pdfBytes = await Http.GetByteArrayAsync($"api/sale/download-pdf/{buyer}");
+
+        // Download in browser
+        var fileName = $"{buyer}_SalesReport.pdf";
+        using var streamRef = new DotNetStreamReference(new MemoryStream(pdfBytes));
+        await JS.InvokeVoidAsync("downloadFileFromStream", fileName, streamRef);
+    }
+}
